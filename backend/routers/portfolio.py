@@ -367,10 +367,6 @@ def portfolio_summary(
                 (t.trade_date for t in txns if t.trans_type == "Buy"), default=None
             )
 
-            gross_buys  = sum(t["total_amount"] for t in txn_dicts if t["trans_type"] == "Buy")
-            total_sold  = sum(t["total_amount"] for t in txn_dicts if t["trans_type"] == "Sell")
-            net_inv     = gross_buys - total_sold
-
             if qty < 0.0001:
                 if include_exited:
                     last_sell = max(
@@ -381,10 +377,8 @@ def portfolio_summary(
                         "asset_id": asset_id, "symbol": asset.symbol,
                         "asset_name": asset.name, "sector": asset.sector,
                         "net_qty": 0.0, "avg_price": round(avg_p, 4),
-                        "total_investment": round(invested, 2),
-                        "total_sold": round(total_sold, 2),
-                        "net_investment": round(net_inv, 2),
-                        "cmp": None, "current_value": 0.0,
+                        "total_investment": round(invested, 2), "cmp": None,
+                        "current_value": 0.0,
                         "unrealised_pnl": None, "unrealised_pnl_pct": None,
                         "realised_pnl": round(realised, 2),
                         "realised_pnl_pct": round(realised / invested * 100, 2) if invested else 0,
@@ -403,7 +397,7 @@ def portfolio_summary(
             asset_cagr = fin.cagr(invested, current_val, first_buy) if first_buy and invested else None
             unrealised = current_val - invested if cmp else None
             unrealised_pct = (
-                round(unrealised / net_inv * 100, 2) if unrealised is not None and net_inv else None
+                round(unrealised / invested * 100, 2) if unrealised is not None and invested else None
             )
 
             total_current        += current_val
@@ -415,8 +409,6 @@ def portfolio_summary(
                 "asset_name": asset.name, "sector": asset.sector,
                 "net_qty": round(qty, 4), "avg_price": round(avg_p, 4),
                 "total_investment": round(invested, 2),
-                "total_sold": round(total_sold, 2),
-                "net_investment": round(net_inv, 2),
                 "cmp": round(cmp, 2) if cmp else None,
                 "current_value": round(current_val, 2) if current_val else None,
                 "unrealised_pnl": round(unrealised, 2) if unrealised is not None else None,
@@ -448,14 +440,9 @@ def portfolio_summary(
 
         holdings.sort(key=lambda x: (x["is_exited"], -(x.get("current_value") or 0)))
 
-        total_sold_folio   = sum(h.get("total_sold", 0) for h in holdings)
-        net_inv_folio      = sum(h.get("net_investment", 0) for h in holdings)
-
         folio_summaries.append({
             "folio_id": folio.id, "folio_name": folio.name,
             "total_investment": round(total_invested_folio, 2),
-            "total_sold": round(total_sold_folio, 2),
-            "net_investment": round(net_inv_folio, 2),
             "current_value": round(total_current, 2),
             "total_gain": round(folio_gain, 2),
             "total_gain_pct": round(folio_gain_pct, 4),
@@ -464,9 +451,7 @@ def portfolio_summary(
         })
 
     if consolidated:
-        all_inv     = sum(s["total_investment"] for s in folio_summaries)
-        all_sold    = sum(s["total_sold"]       for s in folio_summaries)
-        all_net_inv = sum(s["net_investment"]   for s in folio_summaries)
+        all_inv  = sum(s["total_investment"] for s in folio_summaries)
         all_cur  = sum(s["current_value"]    for s in folio_summaries)
         all_gain = all_cur - all_inv
         all_pct  = (all_gain / all_inv * 100) if all_inv else 0.0
@@ -497,8 +482,6 @@ def portfolio_summary(
                     m["folio_names"].append(h["folio_name"])
                     m["net_qty"] = round(m["net_qty"] + h["net_qty"], 4)
                     m["total_investment"] = round(m["total_investment"] + h["total_investment"], 2)
-                    m["total_sold"] = round((m.get("total_sold") or 0) + (h.get("total_sold") or 0), 2)
-                    m["net_investment"] = round((m.get("net_investment") or 0) + (h.get("net_investment") or 0), 2)
                     cv1 = m.get("current_value") or 0
                     cv2 = h.get("current_value") or 0
                     m["current_value"] = round(cv1 + cv2, 2) if (cv1 or cv2) else None
@@ -509,11 +492,10 @@ def portfolio_summary(
 
         for m in merged.values():
             m["folio_name"] = ", ".join(m["folio_names"])
-            m["total_sold"] = round((m.get("total_sold") or 0) + 0, 2)
-            net_inv_m = m.get("net_investment") or 0
+            inv = m.get("total_investment") or 0
             cv  = m.get("current_value") or 0
             m["avg_price"] = round(m["total_investment"] / m["net_qty"], 4) if m["net_qty"] else 0
-            m["unrealised_pnl_pct"] = round((m["unrealised_pnl"] / net_inv_m * 100), 2) if (m.get("unrealised_pnl") is not None and net_inv_m) else None
+            m["unrealised_pnl_pct"] = round((m["unrealised_pnl"] / inv * 100), 2) if (m.get("unrealised_pnl") is not None and inv) else None
             m["portfolio_pct"] = round(cv / all_cur * 100, 2) if all_cur else 0.0
 
         cons_holdings = sorted(merged.values(), key=lambda x: (x["is_exited"], -(x.get("current_value") or 0)))
@@ -521,8 +503,6 @@ def portfolio_summary(
         return {
             "consolidated": True,
             "total_investment": round(all_inv, 2),
-            "total_sold": round(all_sold, 2),
-            "net_investment": round(all_net_inv, 2),
             "current_value": round(all_cur, 2),
             "total_gain": round(all_gain, 2),
             "total_gain_pct": round(all_pct, 4),
