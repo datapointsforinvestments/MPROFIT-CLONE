@@ -19,6 +19,7 @@ from database import get_db
 from models.portfolio import (
     Folio, PortfolioAsset, PortfolioQuote, PortfolioSymbolMapping, PortfolioTransaction, PortfolioDividend,
 )
+from models.benchmark import BenchmarkIndex
 from routers.auth import get_current_user, require_admin, require_fm_or_above
 from services import financial as fin
 from services import name_mapper as nm
@@ -1242,7 +1243,6 @@ def portfolio_returns(
             price_series[sym][today] = ac["cmp"]
 
     # ── Fetch benchmark prices — use DB-managed list ──────────────────────────
-    from models.benchmark import BenchmarkIndex
     db_benchmarks = db.query(BenchmarkIndex).filter(BenchmarkIndex.is_active == True).all()
 
     # Build maps from DB
@@ -1790,3 +1790,49 @@ def dividend_totals(
         "by_stock": sorted(by_stock.values(), key=lambda x: -x["total"]),
         "last_sync": last_row[0].isoformat() if last_row and last_row[0] else None,
     }
+
+
+# ── Benchmarks ────────────────────────────────────────────────────────────────
+
+DEFAULT_BENCHMARKS = [
+    {"label": "Nifty 50",         "yahoo_symbol": "^NSEI"},
+    {"label": "Sensex",           "yahoo_symbol": "^BSESN"},
+    {"label": "Nifty Midcap 150", "yahoo_symbol": "^NSEMDCP150"},
+    {"label": "Nifty Next 50",    "yahoo_symbol": "^NSMIDCP"},
+]
+
+
+@router.get("/benchmarks")
+def list_benchmarks(db: Session = Depends(get_db), _=Depends(get_current_user)):
+    rows = db.query(BenchmarkIndex).order_by(BenchmarkIndex.label).all()
+    # Seed defaults if table is empty
+    if not rows:
+        for bm in DEFAULT_BENCHMARKS:
+            db.add(BenchmarkIndex(label=bm["label"], yahoo_symbol=bm["yahoo_symbol"], is_active=True))
+        db.commit()
+        rows = db.query(BenchmarkIndex).order_by(BenchmarkIndex.label).all()
+    return [{"id": b.id, "label": b.label, "yahoo_symbol": b.yahoo_symbol, "is_active": b.is_active} for b in rows]
+
+
+@router.post("/benchmarks", status_code=201)
+def create_benchmark(body: dict, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    label  = (body.get("label") or "").strip()
+    symbol = (body.get("yahoo_symbol") or "").strip()
+    if not label or not symbol:
+        raise HTTPException(400, "label and yahoo_symbol are required")
+    existing = db.query(BenchmarkIndex).filter(BenchmarkIndex.yahoo_symbol == symbol).first()
+    if existing:
+        existing.label = label; existing.is_active = True
+        db.commit(); db.refresh(existing)
+        return {"id": existing.id, "label": existing.label, "yahoo_symbol": existing.yahoo_symbol, "is_active": existing.is_active}
+    bm = BenchmarkIndex(label=label, yahoo_symbol=symbol, is_active=True)
+    db.add(bm); db.commit(); db.refresh(bm)
+    return {"id": bm.id, "label": bm.label, "yahoo_symbol": bm.yahoo_symbol, "is_active": bm.is_active}
+
+
+@router.delete("/benchmarks/{bm_id}", status_code=204)
+def delete_benchmark(bm_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    bm = db.query(BenchmarkIndex).filter(BenchmarkIndex.id == bm_id).first()
+    if not bm:
+        raise HTTPException(404, "Benchmark not found")
+    db.delete(bm); db.commit()
