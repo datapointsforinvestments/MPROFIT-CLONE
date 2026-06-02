@@ -218,6 +218,9 @@ export const portfolioApi = {
   updateAsset: (assetId: number, data: { sector?: string; name?: string; symbol?: string }) =>
     client.put(`/portfolio/assets/${assetId}`, data),
 
+  exportTransactions: (params: { folio_id?: number; symbol?: string; from_date?: string; to_date?: string; trans_type?: string }) =>
+    client.get('/portfolio/transactions/export', { params, responseType: 'blob' }),
+
   symbolMappings: () => client.get('/portfolio/symbol-mappings'),
   addMapping: (data: { raw_name: string; symbol: string }) => client.post('/portfolio/symbol-mappings', data),
   deleteMapping: (id: number) => client.delete(`/portfolio/symbol-mappings/${id}`),

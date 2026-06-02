@@ -670,6 +670,86 @@ def list_transactions(
     ]
 
 
+@router.get("/transactions/export")
+def export_transactions(
+    folio_id:   Optional[int]  = Query(None),
+    symbol:     Optional[str]  = Query(None),
+    from_date:  Optional[date] = Query(None),
+    to_date:    Optional[date] = Query(None),
+    trans_type: Optional[str]  = Query(None),
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    import openpyxl
+    from fastapi.responses import StreamingResponse
+
+    q = db.query(PortfolioTransaction)
+    if folio_id:
+        q = q.filter(PortfolioTransaction.folio_id == folio_id)
+    if symbol:
+        asset = db.query(PortfolioAsset).filter(PortfolioAsset.symbol == symbol.upper()).first()
+        if asset:
+            q = q.filter(PortfolioTransaction.asset_id == asset.id)
+    if from_date:
+        q = q.filter(PortfolioTransaction.trade_date >= from_date)
+    if to_date:
+        q = q.filter(PortfolioTransaction.trade_date <= to_date)
+    if trans_type:
+        q = q.filter(PortfolioTransaction.trans_type == trans_type)
+    txns = q.order_by(PortfolioTransaction.trade_date.desc()).all()
+
+    folio_map = {f.id: f.name for f in db.query(Folio).all()}
+    asset_map = {a.id: a for a in db.query(PortfolioAsset).all()}
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Transactions"
+    headers = ["Date", "Folio", "Symbol", "Asset Name", "Trans. Type", "Qty", "Price", "Amount", "Brokerage", "Notes"]
+    ws.append(headers)
+
+    # Bold header
+    from openpyxl.styles import Font
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+
+    def _safe(v):
+        try:
+            f = float(v)
+            return 0.0 if (f != f) else f
+        except Exception:
+            return 0.0
+
+    for t in txns:
+        asset = asset_map.get(t.asset_id)
+        ws.append([
+            t.trade_date.isoformat() if t.trade_date else "",
+            folio_map.get(t.folio_id, ""),
+            asset.symbol if asset else "",
+            asset.name if asset else "",
+            t.trans_type,
+            _safe(t.quantity),
+            _safe(t.price),
+            _safe(t.total_amount),
+            _safe(t.brokerage or 0),
+            t.notes or "",
+        ])
+
+    # Auto-fit columns
+    for col in ws.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=10)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 40)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = "transactions_export.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
+    )
+
+
 @router.post("/transactions", status_code=201)
 def add_transaction(body: dict, db: Session = Depends(get_db), current_user=Depends(require_fm_or_above)):
     folio_id   = body.get("folio_id")

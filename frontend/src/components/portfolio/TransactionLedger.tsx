@@ -161,6 +161,30 @@ export default function TransactionLedger({ folios, canAdd = true, canDelete = t
         <button onClick={load} disabled={loading} className="px-4 py-1.5 bg-accent text-white text-sm rounded hover:bg-accent/90 disabled:opacity-50">
           {loading ? 'Loading…' : 'Apply'}
         </button>
+        <button
+          onClick={async () => {
+            const params: Record<string, string | number> = {}
+            if (folioId) params.folio_id = folioId
+            if (symbol.trim()) params.symbol = symbol.trim().toUpperCase()
+            if (fromDate) params.from_date = fromDate
+            if (toDate) params.to_date = toDate
+            if (transType) params.trans_type = transType
+            const res = await portfolioApi.exportTransactions(params)
+            const url = URL.createObjectURL(new Blob([res.data]))
+            const a = document.createElement('a')
+            a.href = url
+            a.download = 'transactions_export.xlsx'
+            a.click()
+            URL.revokeObjectURL(url)
+          }}
+          className="px-4 py-1.5 border border-border text-sm rounded hover:bg-surface2 flex items-center gap-1.5"
+          title="Download current filter as Excel"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Export Excel
+        </button>
         {canAdd && (
           <button onClick={() => setShowAdd((p) => !p)} className="px-4 py-1.5 border border-border text-sm rounded hover:bg-surface2">
             + Add Transaction
