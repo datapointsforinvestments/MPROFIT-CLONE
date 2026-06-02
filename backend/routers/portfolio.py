@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.portfolio import (
-    Folio, PortfolioAsset, PortfolioQuote, PortfolioSymbolMapping, PortfolioTransaction,
+    Folio, PortfolioAsset, PortfolioQuote, PortfolioSymbolMapping, PortfolioTransaction, PortfolioDividend,
 )
 from routers.auth import get_current_user, require_admin, require_fm_or_above
 from services import financial as fin
@@ -347,6 +347,13 @@ def portfolio_summary(
             if t.folio_id == folio.id:
                 grouped.setdefault(t.asset_id, []).append(t)
 
+        # Preload dividends for this folio — keyed by asset_id
+        folio_div_map: dict[int, list] = {}
+        for d in db.query(PortfolioDividend).filter(PortfolioDividend.folio_id == folio.id).all():
+            folio_div_map.setdefault(d.asset_id, []).append(d)
+
+        trailing_cutoff = date.today() - timedelta(days=365)
+
         holdings = []
         all_cfs = []
         total_current = 0.0
@@ -400,6 +407,14 @@ def portfolio_summary(
                 round(unrealised / invested * 100, 2) if unrealised is not None and invested else None
             )
 
+            # Dividend enrichment
+            holding_divs = folio_div_map.get(asset_id, [])
+            total_div = round(sum(float(d.total_received or 0) for d in holding_divs), 2)
+            trailing_div = round(sum(float(d.total_received or 0) for d in holding_divs if d.ex_date >= trailing_cutoff), 2)
+            div_cfs = [(d.ex_date, float(d.total_received or 0)) for d in holding_divs if (d.total_received or 0) > 0]
+            div_xirr_cfs = sorted(cfs + div_cfs, key=lambda x: x[0])
+            div_xirr = fin.xirr(div_xirr_cfs) if div_cfs and div_xirr_cfs else asset_xirr
+
             total_current        += current_val
             total_invested_folio += invested
 
@@ -416,6 +431,7 @@ def portfolio_summary(
                 "realised_pnl": round(realised, 2),
                 "realised_pnl_pct": round(realised / invested * 100, 2) if invested else 0,
                 "xirr_pct": asset_xirr, "cagr_pct": asset_cagr,
+                "total_dividend": total_div, "trailing_div": trailing_div, "div_xirr_pct": div_xirr,
                 "first_purchase_date": first_buy.isoformat() if first_buy else None,
                 "last_exit_date": None, "is_exited": False,
                 "day_change_pct": float(q.day_change_pct) if q and q.day_change_pct else None,
@@ -440,6 +456,9 @@ def portfolio_summary(
 
         holdings.sort(key=lambda x: (x["is_exited"], -(x.get("current_value") or 0)))
 
+        folio_total_div   = round(sum(h.get("total_dividend", 0) for h in holdings), 2)
+        folio_trailing_div = round(sum(h.get("trailing_div", 0) for h in holdings), 2)
+
         folio_summaries.append({
             "folio_id": folio.id, "folio_name": folio.name,
             "total_investment": round(total_invested_folio, 2),
@@ -447,11 +466,15 @@ def portfolio_summary(
             "total_gain": round(folio_gain, 2),
             "total_gain_pct": round(folio_gain_pct, 4),
             "xirr_pct": folio_xirr, "cagr_pct": folio_cagr,
+            "total_dividend": folio_total_div,
+            "trailing_12m_dividend": folio_trailing_div,
             "holdings": holdings,
         })
 
     if consolidated:
-        all_inv  = sum(s["total_investment"] for s in folio_summaries)
+        all_inv      = sum(s["total_investment"]      for s in folio_summaries)
+        all_div      = round(sum(s["total_dividend"]      for s in folio_summaries), 2)
+        all_trail_div= round(sum(s["trailing_12m_dividend"] for s in folio_summaries), 2)
         all_cur  = sum(s["current_value"]    for s in folio_summaries)
         all_gain = all_cur - all_inv
         all_pct  = (all_gain / all_inv * 100) if all_inv else 0.0
@@ -489,6 +512,16 @@ def portfolio_summary(
                     up2 = h.get("unrealised_pnl") or 0
                     m["unrealised_pnl"] = round(up1 + up2, 2) if (m.get("unrealised_pnl") is not None or h.get("unrealised_pnl") is not None) else None
                     m["realised_pnl"] = round((m.get("realised_pnl") or 0) + (h.get("realised_pnl") or 0), 2)
+                    m["total_dividend"] = round((m.get("total_dividend") or 0) + (h.get("total_dividend") or 0), 2)
+                    m["trailing_div"]   = round((m.get("trailing_div") or 0) + (h.get("trailing_div") or 0), 2)
+                    # div_xirr: not re-computed across folios; take weighted average by current_value
+                    cv_total = (cv1 or 0) + (cv2 or 0)
+                    if cv_total > 0:
+                        xi1 = (m.get("div_xirr_pct") or 0) * (cv1 or 0)
+                        xi2 = (h.get("div_xirr_pct") or 0) * (cv2 or 0)
+                        m["div_xirr_pct"] = round((xi1 + xi2) / cv_total, 4)
+                    else:
+                        m["div_xirr_pct"] = m.get("div_xirr_pct")
 
         for m in merged.values():
             m["folio_name"] = ", ".join(m["folio_names"])
@@ -507,6 +540,8 @@ def portfolio_summary(
             "total_gain": round(all_gain, 2),
             "total_gain_pct": round(all_pct, 4),
             "xirr_pct": cons_xirr,
+            "total_dividend": all_div,
+            "trailing_12m_dividend": all_trail_div,
             "folios": folio_summaries,
             "holdings": cons_holdings,
         }
@@ -1536,4 +1571,205 @@ def portfolio_analytics(
             "held_3y_5y": l3y,
             "held_5y_plus": l5y,
         },
+    }
+
+# ── Dividends ─────────────────────────────────────────────────────────────────
+
+@router.post("/dividends/sync")
+def sync_dividends(db: Session = Depends(get_db), _=Depends(require_fm_or_above)):
+    """Incremental sync: delete old Dividend transactions, fetch from Yahoo Finance."""
+
+    # 1. Remove legacy Dividend-type transactions
+    deleted_txns = db.query(PortfolioTransaction).filter(
+        PortfolioTransaction.trans_type == "Dividend"
+    ).delete()
+    db.flush()
+
+    # 2. All non-dividend transactions per (folio, asset)
+    all_txns = (
+        db.query(PortfolioTransaction)
+        .order_by(PortfolioTransaction.folio_id, PortfolioTransaction.asset_id, PortfolioTransaction.trade_date)
+        .all()
+    )
+    folio_asset_txns: dict = {}
+    for t in all_txns:
+        folio_asset_txns.setdefault((t.folio_id, t.asset_id), []).append(t)
+
+    if not folio_asset_txns:
+        db.commit()
+        return {"deleted_transactions": deleted_txns, "synced": 0, "errors": []}
+
+    # 3. Last synced ex_date per (folio, asset) for incremental
+    last_sync: dict = {}
+    for d in db.query(PortfolioDividend).all():
+        key = (d.folio_id, d.asset_id)
+        if key not in last_sync or d.ex_date > last_sync[key]:
+            last_sync[key] = d.ex_date
+
+    # 4. Group by asset
+    asset_folio_ids: dict = {}
+    for (fi, ai) in folio_asset_txns:
+        asset_folio_ids.setdefault(ai, set()).add(fi)
+
+    asset_map = {a.id: a for a in db.query(PortfolioAsset).all()}
+    synced = 0
+    skipped = 0
+    errors = []
+
+    for asset_id, folio_ids in asset_folio_ids.items():
+        asset = asset_map.get(asset_id)
+        if not asset:
+            continue
+
+        folio_lasts = [last_sync.get((fi, asset_id)) for fi in folio_ids]
+        fetch_start = min(folio_lasts) if all(d is not None for d in folio_lasts) else None
+
+        raw_divs = None
+        for suffix in (".NS", ".BO", ""):
+            try:
+                t = yf.Ticker(f"{asset.symbol}{suffix}")
+                d = t.dividends
+                if d is not None and not d.empty:
+                    raw_divs = d
+                    break
+            except Exception:
+                continue
+
+        if raw_divs is None or raw_divs.empty:
+            skipped += 1
+            continue
+
+        div_list = []
+        for idx, amount in raw_divs.items():
+            try:
+                ex_dt = idx.date() if hasattr(idx, "date") else idx
+                if fetch_start and ex_dt <= fetch_start:
+                    continue
+                div_list.append((ex_dt, float(amount)))
+            except Exception:
+                continue
+
+        if not div_list:
+            continue
+
+        for folio_id in folio_ids:
+            key = (folio_id, asset_id)
+            folio_last = last_sync.get(key)
+            txns = folio_asset_txns.get(key, [])
+
+            for ex_dt, dps in div_list:
+                if folio_last and ex_dt <= folio_last:
+                    continue
+
+                qty = 0.0
+                for t in txns:
+                    if t.trade_date <= ex_dt:
+                        if t.trans_type in ("Buy", "Bonus", "Split", "Transfer_In"):
+                            qty += float(t.quantity)
+                        elif t.trans_type in ("Sell", "Transfer_Out"):
+                            qty -= float(t.quantity)
+                qty = max(0.0, qty)
+                if qty < 0.001:
+                    continue
+
+                total = round(qty * dps, 2)
+                exists = db.query(PortfolioDividend).filter(
+                    PortfolioDividend.folio_id == folio_id,
+                    PortfolioDividend.asset_id == asset_id,
+                    PortfolioDividend.ex_date == ex_dt,
+                ).first()
+                if not exists:
+                    db.add(PortfolioDividend(
+                        folio_id=folio_id, asset_id=asset_id, ex_date=ex_dt,
+                        dividend_per_share=round(dps, 6),
+                        qty_held=round(qty, 4),
+                        total_received=total,
+                    ))
+                    synced += 1
+
+    db.commit()
+    return {"deleted_transactions": deleted_txns, "synced": synced, "skipped_no_data": skipped, "errors": errors}
+
+
+@router.get("/dividends")
+def list_dividends(
+    folio_id:   Optional[int]  = Query(None),
+    symbol:     Optional[str]  = Query(None),
+    from_date:  Optional[date] = Query(None),
+    to_date:    Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    q = db.query(PortfolioDividend)
+    if folio_id:
+        q = q.filter(PortfolioDividend.folio_id == folio_id)
+    if from_date:
+        q = q.filter(PortfolioDividend.ex_date >= from_date)
+    if to_date:
+        q = q.filter(PortfolioDividend.ex_date <= to_date)
+
+    divs = q.order_by(PortfolioDividend.ex_date.desc()).all()
+    folio_map = {f.id: f.name for f in db.query(Folio).all()}
+    asset_map = {a.id: a for a in db.query(PortfolioAsset).all()}
+
+    if symbol:
+        sym_up = symbol.upper()
+        asset_match = next((a for a in asset_map.values() if a.symbol.upper() == sym_up), None)
+        divs = [d for d in divs if d.asset_id == asset_match.id] if asset_match else []
+
+    return [
+        {
+            "id": d.id,
+            "folio_id": d.folio_id,
+            "folio_name": folio_map.get(d.folio_id, ""),
+            "asset_id": d.asset_id,
+            "symbol": asset_map[d.asset_id].symbol if d.asset_id in asset_map else "",
+            "asset_name": asset_map[d.asset_id].name if d.asset_id in asset_map else "",
+            "ex_date": d.ex_date.isoformat(),
+            "dividend_per_share": float(d.dividend_per_share or 0),
+            "qty_held": float(d.qty_held or 0),
+            "total_received": float(d.total_received or 0),
+        }
+        for d in divs
+    ]
+
+
+@router.get("/dividends/totals")
+def dividend_totals(
+    folio_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    q = db.query(PortfolioDividend)
+    if folio_id:
+        q = q.filter(PortfolioDividend.folio_id == folio_id)
+
+    divs = q.all()
+    asset_map = {a.id: a for a in db.query(PortfolioAsset).all()}
+    cutoff = date.today() - timedelta(days=365)
+
+    total_all_time = round(sum(float(d.total_received or 0) for d in divs), 2)
+    trailing_12m   = round(sum(float(d.total_received or 0) for d in divs if d.ex_date >= cutoff), 2)
+
+    by_stock: dict = {}
+    for d in divs:
+        asset = asset_map.get(d.asset_id)
+        sym  = asset.symbol if asset else str(d.asset_id)
+        name = asset.name   if asset else sym
+        if sym not in by_stock:
+            by_stock[sym] = {"symbol": sym, "asset_name": name, "total": 0.0, "trailing_12m": 0.0}
+        by_stock[sym]["total"] += float(d.total_received or 0)
+        if d.ex_date >= cutoff:
+            by_stock[sym]["trailing_12m"] += float(d.total_received or 0)
+
+    for s in by_stock.values():
+        s["total"] = round(s["total"], 2)
+        s["trailing_12m"] = round(s["trailing_12m"], 2)
+
+    last_row = db.query(PortfolioDividend.fetched_at).order_by(PortfolioDividend.fetched_at.desc()).first()
+    return {
+        "total_all_time": total_all_time,
+        "trailing_12m":   trailing_12m,
+        "by_stock": sorted(by_stock.values(), key=lambda x: -x["total"]),
+        "last_sync": last_row[0].isoformat() if last_row and last_row[0] else None,
     }

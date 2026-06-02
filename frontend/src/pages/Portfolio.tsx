@@ -8,10 +8,11 @@ import BulkUpload from '../components/portfolio/BulkUpload'
 import PLReport from '../components/portfolio/PLReport'
 import Reconcile from '../components/portfolio/Reconcile'
 import TransactionLedger from '../components/portfolio/TransactionLedger'
+import DividendLedger from '../components/portfolio/DividendLedger'
 import ReturnsReport from '../components/portfolio/ReturnsReport'
 import PortfolioAnalytics from '../components/portfolio/PortfolioAnalytics'
 
-type Tab = 'holdings' | 'analytics' | 'returns' | 'pl-report' | 'transactions' | 'import' | 'reconcile'
+type Tab = 'holdings' | 'analytics' | 'returns' | 'pl-report' | 'transactions' | 'dividends' | 'import' | 'reconcile'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'holdings',     label: 'Holdings' },
@@ -19,6 +20,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'returns',      label: 'Returns' },
   { id: 'pl-report',   label: 'P&L Report' },
   { id: 'transactions', label: 'Transactions' },
+  { id: 'dividends',   label: 'Dividends' },
   { id: 'import',      label: 'Import Data' },
   { id: 'reconcile',   label: 'Reconcile' },
 ]
@@ -301,6 +303,8 @@ export default function Portfolio() {
           {tab === 'pl-report' && <PLReport folios={folios} />}
 
           {tab === 'transactions' && <TransactionLedger folios={folios} canAdd={true} canDelete={isAdmin} />}
+
+          {tab === 'dividends' && <DividendLedger folios={folios} />}
 
           {tab === 'import' && (
             <BulkUpload onSuccess={() => {

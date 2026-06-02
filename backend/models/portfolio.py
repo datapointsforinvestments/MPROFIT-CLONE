@@ -69,3 +69,20 @@ class PortfolioSymbolMapping(Base):
     norm_name = Column(String(300), unique=True, nullable=False)
     symbol    = Column(String(30), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PortfolioDividend(Base):
+    __tablename__ = "portfolio_dividends"
+
+    id                 = Column(Integer, primary_key=True)
+    folio_id           = Column(Integer, ForeignKey("portfolio_folios.id"), nullable=False)
+    asset_id           = Column(Integer, ForeignKey("portfolio_assets.id"), nullable=False)
+    ex_date            = Column(Date, nullable=False)
+    dividend_per_share = Column(Numeric(14, 6))
+    qty_held           = Column(Numeric(18, 4))
+    total_received     = Column(Numeric(14, 2))
+    fetched_at         = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("folio_id", "asset_id", "ex_date"),
+    )

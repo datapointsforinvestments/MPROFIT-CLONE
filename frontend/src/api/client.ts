@@ -221,6 +221,12 @@ export const portfolioApi = {
   exportTransactions: (params: { folio_id?: number; symbol?: string; from_date?: string; to_date?: string; trans_type?: string }) =>
     client.get('/portfolio/transactions/export', { params, responseType: 'blob' }),
 
+  syncDividends: () => client.post('/portfolio/dividends/sync'),
+  dividends: (params?: { folio_id?: number; symbol?: string; from_date?: string; to_date?: string }) =>
+    client.get('/portfolio/dividends', { params }),
+  dividendTotals: (folio_id?: number) =>
+    client.get('/portfolio/dividends/totals', { params: folio_id ? { folio_id } : {} }),
+
   symbolMappings: () => client.get('/portfolio/symbol-mappings'),
   addMapping: (data: { raw_name: string; symbol: string }) => client.post('/portfolio/symbol-mappings', data),
   deleteMapping: (id: number) => client.delete(`/portfolio/symbol-mappings/${id}`),

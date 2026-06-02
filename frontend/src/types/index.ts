@@ -337,6 +337,9 @@ export interface HoldingRow {
   realised_pnl_pct: number
   xirr_pct: number | null
   cagr_pct: number | null
+  total_dividend: number
+  trailing_div: number
+  div_xirr_pct: number | null
   first_purchase_date: string | null
   last_exit_date: string | null
   is_exited: boolean
@@ -353,7 +356,29 @@ export interface FolioSummary {
   total_gain_pct: number
   xirr_pct: number | null
   cagr_pct: number | null
+  total_dividend: number
+  trailing_12m_dividend: number
   holdings: HoldingRow[]
+}
+
+export interface DividendRecord {
+  id: number
+  folio_id: number
+  folio_name: string
+  asset_id: number
+  symbol: string
+  asset_name: string
+  ex_date: string
+  dividend_per_share: number
+  qty_held: number
+  total_received: number
+}
+
+export interface DividendTotals {
+  total_all_time: number
+  trailing_12m: number
+  last_sync: string | null
+  by_stock: { symbol: string; asset_name: string; total: number; trailing_12m: number }[]
 }
 
 export interface ConsolidatedSummary extends FolioSummary {

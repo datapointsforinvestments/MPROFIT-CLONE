@@ -45,7 +45,7 @@ const XirrCell = ({ v }: { v: number | null }) => {
 const ALL_ACTIVE_COL_IDS = [
   'symbol', 'folio_name', 'sector', 'net_qty', 'avg_price', 'cmp',
   'total_investment', 'current_value', 'unrealised_pnl',
-  'xirr_pct', 'cagr_pct', 'portfolio_pct', 'day_change_pct', 'since',
+  'xirr_pct', 'div_xirr_pct', 'cagr_pct', 'total_dividend', 'portfolio_pct', 'day_change_pct', 'since',
 ]
 
 function loadOrder(): string[] {
@@ -233,7 +233,32 @@ export default function PortfolioGrid({ summary, showExited, consolidated, onRef
       cell: ({ row }) => <PnlCell v={row.original.unrealised_pnl} pct={row.original.unrealised_pnl_pct} />,
     },
     { id: 'xirr_pct', header: 'XIRR%', accessorKey: 'xirr_pct', size: 80, cell: ({ getValue }) => <XirrCell v={getValue() as number | null} /> },
+    { id: 'div_xirr_pct', header: 'XIRR+Div%', accessorKey: 'div_xirr_pct', size: 90,
+      cell: ({ getValue, row }) => {
+        const v = getValue() as number | null
+        const base = row.original.xirr_pct
+        if (v === null) return <span className="text-ink3 font-mono text-xs">—</span>
+        const delta = base !== null ? v - base : null
+        return (
+          <div>
+            <XirrCell v={v} />
+            {delta !== null && Math.abs(delta) > 0.05 && (
+              <div className={clsx('font-mono text-2xs', delta > 0 ? 'text-green' : 'text-red')}>
+                {delta > 0 ? '+' : ''}{delta.toFixed(1)}% vs XIRR
+              </div>
+            )}
+          </div>
+        )
+      }
+    },
     { id: 'cagr_pct', header: 'CAGR%', accessorKey: 'cagr_pct', size: 80, cell: ({ getValue }) => <XirrCell v={getValue() as number | null} /> },
+    { id: 'total_dividend', header: 'Dividends', accessorKey: 'total_dividend', size: 90,
+      cell: ({ getValue }) => {
+        const v = getValue() as number
+        if (!v || v === 0) return <span className="text-ink3 text-xs font-mono">—</span>
+        return <span className="font-mono text-xs text-ink">{fmtCr(v)}</span>
+      }
+    },
     {
       id: 'portfolio_pct',
       header: 'Port%',
@@ -311,20 +336,30 @@ export default function PortfolioGrid({ summary, showExited, consolidated, onRef
   const totalCurrent  = summary.current_value
   const totalGain     = summary.total_gain
   const gainPct       = summary.total_gain_pct
+  const totalDiv      = (summary as FolioSummary).total_dividend ?? 0
+  const trailing12m   = (summary as FolioSummary).trailing_12m_dividend ?? 0
+  const divYieldPct   = totalCurrent > 0 ? (trailing12m / totalCurrent * 100) : 0
 
   return (
     <div className="space-y-4">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: 'Total Invested', value: fmtCr(totalInvested) },
           { label: 'Current Value', value: fmtCr(totalCurrent) },
           { label: 'Unrealised P&L', value: `${totalGain >= 0 ? '+' : ''}${fmtCr(totalGain)} (${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%)`, color: totalGain >= 0 ? 'text-green' : 'text-red' },
           { label: 'Portfolio XIRR', value: summary.xirr_pct !== null ? `${summary.xirr_pct > 0 ? '+' : ''}${summary.xirr_pct.toFixed(1)}%` : '—', color: (summary.xirr_pct ?? 0) >= 0 ? 'text-green' : 'text-red' },
+          {
+            label: 'Dividends Rcvd',
+            value: totalDiv > 0 ? fmtCr(totalDiv) : '—',
+            sub: totalDiv > 0 ? `${divYieldPct.toFixed(2)}% yield (12m)` : 'Sync dividends tab',
+            color: totalDiv > 0 ? 'text-ink' : 'text-ink3',
+          },
         ].map((c) => (
           <div key={c.label} className="bg-surface border border-border rounded-lg px-4 py-3">
             <div className="text-xs text-ink3 mb-1">{c.label}</div>
-            <div className={clsx('font-mono font-semibold text-sm', c.color ?? 'text-ink')}>{c.value}</div>
+            <div className={clsx('font-mono font-semibold text-sm', (c as { color?: string }).color ?? 'text-ink')}>{c.value}</div>
+            {(c as { sub?: string }).sub && <div className="text-2xs text-ink3 mt-0.5">{(c as { sub?: string }).sub}</div>}
           </div>
         ))}
       </div>
