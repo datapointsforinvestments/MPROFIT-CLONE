@@ -329,6 +329,8 @@ export interface HoldingRow {
   net_qty: number
   avg_price: number
   total_investment: number
+  total_sold: number
+  net_investment: number
   cmp: number | null
   current_value: number | null
   unrealised_pnl: number | null
@@ -348,6 +350,8 @@ export interface FolioSummary {
   folio_id: number
   folio_name: string
   total_investment: number
+  total_sold: number
+  net_investment: number
   current_value: number
   total_gain: number
   total_gain_pct: number

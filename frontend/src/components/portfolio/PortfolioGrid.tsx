@@ -308,18 +308,22 @@ export default function PortfolioGrid({ summary, showExited, consolidated, onRef
   if (!summary) return <div className="text-ink3 text-sm p-8 text-center">No portfolio data. Upload transactions to get started.</div>
 
   const totalInvested = summary.total_investment
+  const totalSold     = (summary as FolioSummary).total_sold ?? 0
+  const netInvestment = (summary as FolioSummary).net_investment ?? totalInvested
   const totalCurrent  = summary.current_value
   const totalGain     = summary.total_gain
-  const gainPct       = summary.total_gain_pct
+  const gainPct       = netInvestment ? (totalGain / netInvestment * 100) : summary.total_gain_pct
 
   return (
     <div className="space-y-4">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
           { label: 'Total Invested', value: fmtCr(totalInvested) },
+          { label: 'Total Sold', value: fmtCr(totalSold), color: totalSold > 0 ? 'text-ink' : undefined },
+          { label: 'Net Investment', value: fmtCr(netInvestment) },
           { label: 'Current Value', value: fmtCr(totalCurrent) },
-          { label: 'Unrealised P&L', value: `${totalGain >= 0 ? '+' : ''}${fmtCr(totalGain)} (${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%)`, color: totalGain >= 0 ? 'text-green' : 'text-red' },
+          { label: 'Unrealised P&L (on Net)', value: `${totalGain >= 0 ? '+' : ''}${fmtCr(totalGain)} (${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%)`, color: totalGain >= 0 ? 'text-green' : 'text-red' },
           { label: 'Portfolio XIRR', value: summary.xirr_pct !== null ? `${summary.xirr_pct > 0 ? '+' : ''}${summary.xirr_pct.toFixed(1)}%` : '—', color: (summary.xirr_pct ?? 0) >= 0 ? 'text-green' : 'text-red' },
         ].map((c) => (
           <div key={c.label} className="bg-surface border border-border rounded-lg px-4 py-3">

@@ -93,11 +93,13 @@ export default function Portfolio() {
       if (Array.isArray(data)) {
         // Multiple folios returned — wrap as consolidated-style
         const total_investment = data.reduce((s: number, f: FolioSummary) => s + f.total_investment, 0)
+        const total_sold       = data.reduce((s: number, f: FolioSummary) => s + (f.total_sold ?? 0), 0)
+        const net_investment   = data.reduce((s: number, f: FolioSummary) => s + (f.net_investment ?? 0), 0)
         const current_value    = data.reduce((s: number, f: FolioSummary) => s + f.current_value, 0)
         const total_gain       = current_value - total_investment
         const total_gain_pct   = total_investment ? (total_gain / total_investment * 100) : 0
         const allHoldings = data.flatMap((f: FolioSummary) => f.holdings)
-        setSummary({ folio_id: 0, folio_name: 'All', total_investment, current_value, total_gain, total_gain_pct, xirr_pct: null, cagr_pct: null, holdings: allHoldings, consolidated: true, folios: data } as ConsolidatedSummary)
+        setSummary({ folio_id: 0, folio_name: 'All', total_investment, total_sold, net_investment, current_value, total_gain, total_gain_pct, xirr_pct: null, cagr_pct: null, holdings: allHoldings, consolidated: true, folios: data } as ConsolidatedSummary)
       } else {
         setSummary(data)
       }
