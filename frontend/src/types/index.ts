@@ -356,6 +356,7 @@ export interface FolioSummary {
   total_gain_pct: number
   xirr_pct: number | null
   cagr_pct: number | null
+  div_xirr_pct: number | null
   total_dividend: number
   trailing_12m_dividend: number
   holdings: HoldingRow[]

@@ -339,20 +339,27 @@ export default function PortfolioGrid({ summary, showExited, consolidated, onRef
   const totalDiv      = (summary as FolioSummary).total_dividend ?? 0
   const trailing12m   = (summary as FolioSummary).trailing_12m_dividend ?? 0
   const divYieldPct   = totalCurrent > 0 ? (trailing12m / totalCurrent * 100) : 0
+  const divXirr       = (summary as FolioSummary).div_xirr_pct ?? null
 
   return (
     <div className="space-y-4">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      {/* Summary Cards — 3×2 grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
           { label: 'Total Invested', value: fmtCr(totalInvested) },
           { label: 'Current Value', value: fmtCr(totalCurrent) },
           { label: 'Unrealised P&L', value: `${totalGain >= 0 ? '+' : ''}${fmtCr(totalGain)} (${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%)`, color: totalGain >= 0 ? 'text-green' : 'text-red' },
           { label: 'Portfolio XIRR', value: summary.xirr_pct !== null ? `${summary.xirr_pct > 0 ? '+' : ''}${summary.xirr_pct.toFixed(1)}%` : '—', color: (summary.xirr_pct ?? 0) >= 0 ? 'text-green' : 'text-red' },
           {
+            label: 'XIRR (incl. Dividends)',
+            value: divXirr !== null ? `${divXirr > 0 ? '+' : ''}${divXirr.toFixed(1)}%` : (totalDiv > 0 ? '—' : 'Sync dividends tab'),
+            sub: divXirr !== null && summary.xirr_pct !== null ? `${divXirr > summary.xirr_pct ? '+' : ''}${(divXirr - summary.xirr_pct).toFixed(1)}% vs price-only` : undefined,
+            color: divXirr !== null ? (divXirr >= 0 ? 'text-green' : 'text-red') : 'text-ink3',
+          },
+          {
             label: 'Dividends Rcvd',
             value: totalDiv > 0 ? fmtCr(totalDiv) : '—',
-            sub: totalDiv > 0 ? `${divYieldPct.toFixed(2)}% yield (12m)` : 'Sync dividends tab',
+            sub: totalDiv > 0 ? `${divYieldPct.toFixed(2)}% yield (trailing 12m)` : 'Sync dividends tab',
             color: totalDiv > 0 ? 'text-ink' : 'text-ink3',
           },
         ].map((c) => (

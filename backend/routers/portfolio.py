@@ -341,6 +341,8 @@ def portfolio_summary(
     )
 
     folio_summaries = []
+    all_portfolio_div_cfs: list[tuple] = []  # Accumulates across folios for consolidated
+
     for folio in folios:
         grouped: dict[int, list] = {}
         for t in all_txns:
@@ -456,8 +458,19 @@ def portfolio_summary(
 
         holdings.sort(key=lambda x: (x["is_exited"], -(x.get("current_value") or 0)))
 
-        folio_total_div   = round(sum(h.get("total_dividend", 0) for h in holdings), 2)
-        folio_trailing_div = round(sum(h.get("trailing_div", 0) for h in holdings), 2)
+        folio_total_div    = round(sum(h.get("total_dividend", 0) for h in holdings), 2)
+        folio_trailing_div = round(sum(h.get("trailing_div",    0) for h in holdings), 2)
+
+        # Portfolio-level XIRR including dividends
+        folio_all_div_cfs = [
+            (d.ex_date, float(d.total_received or 0))
+            for divs in folio_div_map.values()
+            for d in divs
+            if (d.total_received or 0) > 0
+        ]
+        all_portfolio_div_cfs.extend(folio_all_div_cfs)
+        folio_div_xirr_cfs = sorted(all_cfs + folio_all_div_cfs, key=lambda x: x[0])
+        folio_div_xirr = fin.xirr(folio_div_xirr_cfs) if folio_all_div_cfs and folio_div_xirr_cfs else folio_xirr
 
         folio_summaries.append({
             "folio_id": folio.id, "folio_name": folio.name,
@@ -466,6 +479,7 @@ def portfolio_summary(
             "total_gain": round(folio_gain, 2),
             "total_gain_pct": round(folio_gain_pct, 4),
             "xirr_pct": folio_xirr, "cagr_pct": folio_cagr,
+            "div_xirr_pct": folio_div_xirr,
             "total_dividend": folio_total_div,
             "trailing_12m_dividend": folio_trailing_div,
             "holdings": holdings,
@@ -491,6 +505,8 @@ def portfolio_summary(
             cons_cfs.append((date.today(), all_cur))
         cons_cfs.sort(key=lambda x: x[0])
         cons_xirr = fin.xirr(cons_cfs) if cons_cfs else None
+        cons_div_xirr_cfs = sorted(cons_cfs + all_portfolio_div_cfs, key=lambda x: x[0])
+        cons_div_xirr = fin.xirr(cons_div_xirr_cfs) if all_portfolio_div_cfs and cons_div_xirr_cfs else cons_xirr
 
         # Merge holdings across folios for consolidated view
         merged: dict[str, dict] = {}
@@ -540,6 +556,7 @@ def portfolio_summary(
             "total_gain": round(all_gain, 2),
             "total_gain_pct": round(all_pct, 4),
             "xirr_pct": cons_xirr,
+            "div_xirr_pct": cons_div_xirr,
             "total_dividend": all_div,
             "trailing_12m_dividend": all_trail_div,
             "folios": folio_summaries,
