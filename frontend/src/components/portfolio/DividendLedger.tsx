@@ -19,6 +19,7 @@ export default function DividendLedger({ folios }: Props) {
   const [loading, setLoading]   = useState(false)
   const [syncing, setSyncing]   = useState(false)
   const [syncResult, setSyncResult] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<number | null>(null)
   const [folioId, setFolioId]   = useState<number | ''>('')
   const [symbol, setSymbol]     = useState('')
   const [fromDate, setFromDate] = useState('')
@@ -40,6 +41,17 @@ export default function DividendLedger({ folios }: Props) {
       setTotals(totalsRes.data)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleDelete(id: number, symbol: string, date: string) {
+    if (!confirm(`Delete dividend for ${symbol} on ${date}?\n\nThis will also block this ex-date from being re-synced in the future.`)) return
+    setDeleting(id)
+    try {
+      await portfolioApi.deleteDividend(id)
+      await load()
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -185,14 +197,14 @@ export default function DividendLedger({ folios }: Props) {
               <table className="w-full text-xs">
                 <thead className="bg-surface2">
                   <tr>
-                    {['Ex-Date', 'Folio', 'Symbol', 'Company', '₹/Share', 'Qty Held', 'Total Received'].map(h => (
+                    {['Ex-Date', 'Folio', 'Symbol', 'Company', '₹/Share', 'Qty Held', 'Total Received', ''].map(h => (
                       <th key={h} className={clsx('px-3 py-2 text-left text-ink3 font-medium', ['₹/Share', 'Qty Held', 'Total Received'].includes(h) && 'text-right')}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {divs.map((d) => (
-                    <tr key={d.id} className="border-t border-border/50 hover:bg-surface2">
+                    <tr key={d.id} className="border-t border-border/50 hover:bg-surface2 group">
                       <td className="px-3 py-1.5 text-ink2 font-mono">{d.ex_date}</td>
                       <td className="px-3 py-1.5 text-ink2">{d.folio_name}</td>
                       <td className="px-3 py-1.5 font-medium text-accent font-mono">{d.symbol}</td>
@@ -200,6 +212,16 @@ export default function DividendLedger({ folios }: Props) {
                       <td className="px-3 py-1.5 font-mono text-right">₹{fmt(d.dividend_per_share, 4)}</td>
                       <td className="px-3 py-1.5 font-mono text-right">{fmt(d.qty_held, 0)}</td>
                       <td className="px-3 py-1.5 font-mono font-semibold text-green text-right">{fmtCr(d.total_received)}</td>
+                      <td className="px-3 py-1.5 text-right">
+                        <button
+                          onClick={() => handleDelete(d.id, d.symbol, d.ex_date)}
+                          disabled={deleting === d.id}
+                          className="opacity-0 group-hover:opacity-100 text-ink3 hover:text-red transition-opacity text-xs px-1"
+                          title="Delete this dividend record"
+                        >
+                          {deleting === d.id ? '…' : '✕'}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

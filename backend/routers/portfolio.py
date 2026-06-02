@@ -1717,7 +1717,7 @@ def list_dividends(
     db: Session = Depends(get_db),
     _=Depends(get_current_user),
 ):
-    q = db.query(PortfolioDividend)
+    q = db.query(PortfolioDividend).filter(PortfolioDividend.total_received > 0)
     if folio_id:
         q = q.filter(PortfolioDividend.folio_id == folio_id)
     if from_date:
@@ -1757,7 +1757,7 @@ def dividend_totals(
     db: Session = Depends(get_db),
     _=Depends(get_current_user),
 ):
-    q = db.query(PortfolioDividend)
+    q = db.query(PortfolioDividend).filter(PortfolioDividend.total_received > 0)
     if folio_id:
         q = q.filter(PortfolioDividend.folio_id == folio_id)
 
@@ -1790,6 +1790,30 @@ def dividend_totals(
         "by_stock": sorted(by_stock.values(), key=lambda x: -x["total"]),
         "last_sync": last_row[0].isoformat() if last_row and last_row[0] else None,
     }
+
+
+@router.delete("/dividends/{dividend_id}", status_code=204)
+def delete_dividend(dividend_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    """Delete a dividend record. Inserts a zero-value sentinel so sync never re-fetches this ex_date."""
+    rec = db.query(PortfolioDividend).filter(PortfolioDividend.id == dividend_id).first()
+    if not rec:
+        raise HTTPException(404, "Dividend record not found")
+    # Sentinel: keeps the ex_date as a sync boundary but shows nothing in the UI
+    sentinel = PortfolioDividend(
+        folio_id=rec.folio_id, asset_id=rec.asset_id,
+        ex_date=rec.ex_date, dividend_per_share=0, qty_held=0, total_received=0,
+    )
+    db.delete(rec)
+    db.flush()
+    # Only add sentinel if no other record exists for this (folio, asset, ex_date)
+    existing = db.query(PortfolioDividend).filter(
+        PortfolioDividend.folio_id == rec.folio_id,
+        PortfolioDividend.asset_id == rec.asset_id,
+        PortfolioDividend.ex_date == rec.ex_date,
+    ).first()
+    if not existing:
+        db.add(sentinel)
+    db.commit()
 
 
 # ── Benchmarks ────────────────────────────────────────────────────────────────

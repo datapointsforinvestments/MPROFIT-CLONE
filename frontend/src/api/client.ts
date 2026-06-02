@@ -225,6 +225,7 @@ export const portfolioApi = {
   addBenchmark: (label: string, yahoo_symbol: string) => client.post('/portfolio/benchmarks', { label, yahoo_symbol }),
   deleteBenchmark: (id: number) => client.delete(`/portfolio/benchmarks/${id}`),
 
+  deleteDividend: (id: number) => client.delete(`/portfolio/dividends/${id}`),
   syncDividends: () => client.post('/portfolio/dividends/sync'),
   dividends: (params?: { folio_id?: number; symbol?: string; from_date?: string; to_date?: string }) =>
     client.get('/portfolio/dividends', { params }),
