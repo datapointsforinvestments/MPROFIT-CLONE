@@ -22,7 +22,7 @@ const PnlCell = ({ v, pct }: { v: number | null; pct: number | null }) => {
   return (
     <div>
       <div className={clsx('font-mono text-xs font-medium', v > 0 ? 'text-green' : v < 0 ? 'text-red' : 'text-ink2')}>
-        {v > 0 ? '+' : ''}₹{Math.abs(v).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+        {v > 0 ? '+' : v < 0 ? '-' : ''}{fmtCr(Math.abs(v))}
       </div>
       {pct !== null && (
         <div className={clsx('font-mono text-2xs', v > 0 ? 'text-green' : v < 0 ? 'text-red' : 'text-ink3')}>
