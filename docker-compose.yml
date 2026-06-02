@@ -1,0 +1,33 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: m3_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: m3_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - m3_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: m3_backend
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/m3_platform
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+
+volumes:
+  m3_pgdata:

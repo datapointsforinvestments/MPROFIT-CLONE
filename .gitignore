@@ -1,0 +1,30 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/.env
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Data / uploads
+backend/uploaded_files/
+*.xlsx
+*.csv
+
+# Scripts (one-shot, not needed in repo)
+backend/setup_db.py
+backend/fix_symbols.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs and stray files
+backend/*.log
+frontend/*.log
+backend/=*
+backend/seed.py
+backend/test_*.py

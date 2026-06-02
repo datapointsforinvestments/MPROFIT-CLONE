@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-bg text-ink font-sans;
+  }
+
+  /* Financial numbers always use mono font */
+  .num {
+    @apply font-mono;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-accent text-white px-4 py-2 rounded text-sm font-medium hover:bg-accent-mid transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-surface2 text-ink2 border border-border px-4 py-2 rounded text-sm font-medium hover:bg-border transition-colors;
+  }
+
+  .badge-buy {
+    @apply bg-green-bg text-green text-xs font-medium px-2 py-0.5 rounded-full;
+  }
+
+  .badge-sell {
+    @apply bg-red-bg text-red text-xs font-medium px-2 py-0.5 rounded-full;
+  }
+
+  .badge-hold {
+    @apply bg-amber-bg text-amber text-xs font-medium px-2 py-0.5 rounded-full;
+  }
+
+  .badge-watch {
+    @apply bg-surface2 text-ink3 text-xs font-medium px-2 py-0.5 rounded-full border border-border;
+  }
+}
