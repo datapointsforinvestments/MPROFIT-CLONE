@@ -352,8 +352,8 @@ export default function PortfolioGrid({ summary, showExited, consolidated, onRef
 
   return (
     <div className="space-y-4">
-      {/* Summary Cards — 3-col grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      {/* Summary Cards — single row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
         {[
           { label: 'Total Invested', value: fmtCr(totalInvested) },
           { label: 'Current Value', value: fmtCr(totalCurrent) },
