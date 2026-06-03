@@ -341,13 +341,34 @@ export default function PortfolioGrid({ summary, showExited, consolidated, onRef
   const divYieldPct   = totalCurrent > 0 ? (trailing12m / totalCurrent * 100) : 0
   const divXirr       = (summary as FolioSummary).div_xirr_pct ?? null
 
+  // Today's gain: sum of (current_value × day_change_pct / 100) for active holdings with price data
+  const activeHoldings = ('holdings' in summary ? summary.holdings : []).filter(
+    (h: HoldingRow) => !h.is_exited && h.current_value && h.day_change_pct !== null
+  )
+  const todayGainVal  = activeHoldings.reduce((s: number, h: HoldingRow) => s + (h.current_value! * (h.day_change_pct! / 100)), 0)
+  const todayPrevVal  = totalCurrent - todayGainVal
+  const todayGainPct  = todayPrevVal > 0 ? (todayGainVal / todayPrevVal * 100) : 0
+  const hasTodayData  = activeHoldings.length > 0
+
   return (
     <div className="space-y-4">
-      {/* Summary Cards — 3×2 grid */}
+      {/* Summary Cards — 3-col grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
           { label: 'Total Invested', value: fmtCr(totalInvested) },
           { label: 'Current Value', value: fmtCr(totalCurrent) },
+          {
+            label: "Today's Gain / Loss",
+            value: hasTodayData
+              ? `${todayGainVal >= 0 ? '+' : ''}${fmtCr(todayGainVal)}`
+              : '— (refresh prices)',
+            sub: hasTodayData
+              ? `${todayGainPct >= 0 ? '+' : ''}${todayGainPct.toFixed(2)}%`
+              : undefined,
+            color: hasTodayData
+              ? (todayGainVal >= 0 ? 'text-green' : 'text-red')
+              : 'text-ink3',
+          },
           { label: 'Unrealised P&L', value: `${totalGain >= 0 ? '+' : ''}${fmtCr(totalGain)} (${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%)`, color: totalGain >= 0 ? 'text-green' : 'text-red' },
           { label: 'Portfolio XIRR', value: summary.xirr_pct !== null ? `${summary.xirr_pct > 0 ? '+' : ''}${summary.xirr_pct.toFixed(1)}%` : '—', color: (summary.xirr_pct ?? 0) >= 0 ? 'text-green' : 'text-red' },
           {
@@ -363,10 +384,10 @@ export default function PortfolioGrid({ summary, showExited, consolidated, onRef
             color: totalDiv > 0 ? 'text-ink' : 'text-ink3',
           },
         ].map((c) => (
-          <div key={c.label} className="bg-surface border border-border rounded-lg px-4 py-3">
-            <div className="text-xs text-ink3 mb-1">{c.label}</div>
-            <div className={clsx('font-mono font-semibold text-sm', (c as { color?: string }).color ?? 'text-ink')}>{c.value}</div>
-            {(c as { sub?: string }).sub && <div className="text-2xs text-ink3 mt-0.5">{(c as { sub?: string }).sub}</div>}
+          <div key={c.label} className="bg-surface border border-border rounded-md px-3 py-2">
+            <div className="text-[10px] text-ink3 mb-0.5 leading-tight">{c.label}</div>
+            <div className={clsx('font-mono font-semibold text-xs leading-snug', (c as { color?: string }).color ?? 'text-ink')}>{c.value}</div>
+            {(c as { sub?: string }).sub && <div className="text-[10px] text-ink3 leading-none mt-0.5">{(c as { sub?: string }).sub}</div>}
           </div>
         ))}
       </div>
